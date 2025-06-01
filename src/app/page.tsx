@@ -60,8 +60,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Workout Tracker</h1>
-
         <div className="grid md:grid-cols-2 gap-8">
           {/* Workout Section */}
           <div className="bg-white rounded-lg shadow-sm p-6">
@@ -129,10 +127,10 @@ export default function Home() {
             )}
           </div>
 
-          {/* Health Tracking Section */}
+          {/* Health Section */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Health Tracking</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Health</h2>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

@@ -88,7 +88,7 @@ export default function SyncPage() {
             href="/"
             className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
           >
-            Back to Home
+            Back
           </Link>
         </div>
 

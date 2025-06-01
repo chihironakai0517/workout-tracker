@@ -1,12 +1,12 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
-import PWAInstallPrompt from '../components/PWAInstallPrompt'
-import OfflineIndicator from '../components/OfflineIndicator'
+// import PWAInstallPrompt from '../components/PWAInstallPrompt'
+// import OfflineIndicator from '../components/OfflineIndicator'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Workout Tracker',
+  title: 'Fitness App',
   description: 'Track your workouts, nutrition, and fitness goals with ease',
   manifest: '/manifest.json',
   themeColor: '#3b82f6',
@@ -14,7 +14,7 @@ export const metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Workout Tracker',
+    title: 'Fitness App',
   },
   icons: {
     icon: '/workout-icon.svg',
@@ -43,15 +43,19 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/workout-icon.svg" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Workout Tracker" />
+        <meta name="apple-mobile-web-app-title" content="Fitness App" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="msapplication-TileColor" content="#3b82f6" />
         <meta name="msapplication-tap-highlight" content="no" />
       </head>
       <body className={`${inter.className} min-h-screen bg-gray-50`}>
         {children}
-        <PWAInstallPrompt />
-        <OfflineIndicator />
+        {/* PWA components temporarily disabled for debugging */}
+        {/* <PWAInstallPrompt /> */}
+        {/* <OfflineIndicator /> */}
+
+        {/* Service Worker registration temporarily disabled for debugging */}
+        {/*
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -70,6 +74,7 @@ export default function RootLayout({
             `,
           }}
         />
+        */}
       </body>
     </html>
   )

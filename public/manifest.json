@@ -1,6 +1,6 @@
 {
-  "name": "Workout Tracker",
-  "short_name": "WorkoutTracker",
+  "name": "Fitness App",
+  "short_name": "FitnessApp",
   "description": "Track your workouts, progress, and health data with ease",
   "start_url": "/",
   "display": "standalone",
@@ -60,7 +60,7 @@
       "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Mobile view of the workout tracker"
+      "label": "Mobile view of the fitness app"
     }
   ],
   "prefer_related_applications": false,
