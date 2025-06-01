@@ -8,17 +8,19 @@ export interface BodyMeasurement {
   height: number;
   gender: "male" | "female";
   bmr?: number;
+  activityLevel?: "sedentary" | "lightly_active" | "moderately_active" | "very_active" | "extremely_active";
 }
 
 export interface Meal {
   id: string;
   date: string;
-  type: "breakfast" | "lunch" | "dinner" | "snack";
+  mealType: "Breakfast" | "Lunch" | "Dinner" | "Snack";
   name: string;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
+  time: string;
 }
 
 export interface DailyNutrition {

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -14,8 +14,8 @@ import {
   Legend
 } from "chart.js";
 import { BodyMeasurement } from "../../types";
-import { getMeasurements, saveMeasurement, getLatestMeasurement, updateMeasurement, deleteMeasurement, getGoals } from "../utils/storage";
-import { calculateBMR } from "../utils/bmr";
+import { getMeasurements, saveMeasurement, getLatestMeasurement, updateMeasurement, deleteMeasurement } from "../utils/storage";
+import { calculateBMR, calculateTDEE, getActivityLevelLabel } from "../utils/bmr";
 
 ChartJS.register(
   CategoryScale,
@@ -30,7 +30,6 @@ ChartJS.register(
 export default function BodyMeasurements() {
   const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
   const [editingMeasurement, setEditingMeasurement] = useState<BodyMeasurement | null>(null);
-  const [goals, setGoals] = useState<{ targetWeight?: number; targetBodyFat?: number } | null>(null);
   const [newMeasurement, setNewMeasurement] = useState<Omit<BodyMeasurement, "id">>({
     date: new Date().toISOString().split("T")[0],
     weight: 0,
@@ -38,14 +37,13 @@ export default function BodyMeasurements() {
     age: 25,
     height: 170,
     gender: "male",
-    bmr: 0
+    bmr: 0,
+    activityLevel: "moderately_active"
   });
 
   useEffect(() => {
     const data = getMeasurements();
     setMeasurements(data);
-    const currentGoals = getGoals();
-    setGoals(currentGoals);
 
     const latestMeasurement = getLatestMeasurement();
     if (latestMeasurement && !editingMeasurement) {
@@ -56,7 +54,8 @@ export default function BodyMeasurements() {
         age: latestMeasurement.age,
         height: latestMeasurement.height,
         gender: latestMeasurement.gender,
-        bmr: latestMeasurement.bmr
+        bmr: latestMeasurement.bmr,
+        activityLevel: latestMeasurement.activityLevel || "moderately_active"
       });
     }
   }, [editingMeasurement]);
@@ -100,7 +99,8 @@ export default function BodyMeasurements() {
       age: measurement.age,
       height: measurement.height,
       gender: measurement.gender,
-      bmr: measurement.bmr
+      bmr: measurement.bmr,
+      activityLevel: measurement.activityLevel || "moderately_active"
     });
   };
 
@@ -115,7 +115,8 @@ export default function BodyMeasurements() {
         age: latestMeasurement.age,
         height: latestMeasurement.height,
         gender: latestMeasurement.gender,
-        bmr: latestMeasurement.bmr
+        bmr: latestMeasurement.bmr,
+        activityLevel: latestMeasurement.activityLevel || "moderately_active"
       });
     }
   };
@@ -132,83 +133,6 @@ export default function BodyMeasurements() {
     }
   };
 
-  const chartData = {
-    labels: measurements.map(m => new Date(m.date).toLocaleDateString()),
-    datasets: [
-      {
-        label: "Weight (kg)",
-        data: measurements.map(m => m.weight),
-        borderColor: "rgb(75, 192, 192)",
-        tension: 0.1
-      },
-      ...(goals?.targetWeight ? [{
-        label: "Target Weight",
-        data: Array(measurements.length).fill(goals.targetWeight),
-        borderColor: "rgba(75, 192, 192, 0.5)",
-        borderDash: [5, 5],
-        pointRadius: 0,
-        tension: 0
-      }] : []),
-      {
-        label: "Body Fat %",
-        data: measurements.map(m => m.bodyFat),
-        borderColor: "rgb(255, 99, 132)",
-        tension: 0.1
-      },
-      ...(goals?.targetBodyFat ? [{
-        label: "Target Body Fat",
-        data: Array(measurements.length).fill(goals.targetBodyFat),
-        borderColor: "rgba(255, 99, 132, 0.5)",
-        borderDash: [5, 5],
-        pointRadius: 0,
-        tension: 0
-      }] : [])
-    ]
-  };
-
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: "top" as const,
-      },
-      title: {
-        display: true,
-        text: "Progress Over Time"
-      },
-      tooltip: {
-        callbacks: {
-          label: (context: any) => {
-            const label = context.dataset.label;
-            const value = context.parsed.y;
-            if (label.includes("Weight")) {
-              return `${label}: ${value} kg`;
-            } else if (label.includes("Body Fat")) {
-              return `${label}: ${value}%`;
-            }
-            return `${label}: ${value}`;
-          }
-        }
-      }
-    },
-    scales: {
-      x: {
-        reverse: false,
-        title: {
-          display: true,
-          text: "Date"
-        }
-      },
-      y: {
-        beginAtZero: false,
-        title: {
-          display: true,
-          text: "Value"
-        }
-      }
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto">
@@ -220,17 +144,6 @@ export default function BodyMeasurements() {
           >
             Back
           </Link>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Progress Chart</h2>
-          {measurements.length > 0 ? (
-            <Line data={chartData} options={chartOptions} />
-          ) : (
-            <p className="text-center text-gray-500 py-4">
-              Add measurements to see your progress chart
-            </p>
-          )}
         </div>
 
         <div className="bg-white rounded-lg shadow-sm p-6">
@@ -321,6 +234,37 @@ export default function BodyMeasurements() {
                 <input
                   type="number"
                   value={newMeasurement.bmr || ""}
+                  className="w-full border rounded-md px-3 py-2 bg-gray-50"
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Activity Level
+                </label>
+                <select
+                  value={newMeasurement.activityLevel || "moderately_active"}
+                  onChange={(e) => setNewMeasurement(prev => ({ 
+                    ...prev, 
+                    activityLevel: e.target.value as "sedentary" | "lightly_active" | "moderately_active" | "very_active" | "extremely_active"
+                  }))}
+                  className="w-full border rounded-md px-3 py-2"
+                >
+                  <option value="sedentary">Sedentary (little/no exercise)</option>
+                  <option value="lightly_active">Lightly Active (1-3 days/week)</option>
+                  <option value="moderately_active">Moderately Active (3-5 days/week)</option>
+                  <option value="very_active">Very Active (6-7 days/week)</option>
+                  <option value="extremely_active">Extremely Active (physical job)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Estimated TDEE (kcal/day)
+                </label>
+                <input
+                  type="number"
+                  value={newMeasurement.bmr && newMeasurement.activityLevel ? 
+                    calculateTDEE(newMeasurement.bmr, newMeasurement.activityLevel) : ""}
                   className="w-full border rounded-md px-3 py-2 bg-gray-50"
                   disabled
                 />

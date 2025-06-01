@@ -29,7 +29,8 @@ export const DEFAULT_PRESETS = {
   ],
   arms: [
     "Arm Curl",
-    "Dumbbell Preacher Curl",
+    "Dumbbell Preacher Curl(R)",
+    "Dumbbell Preacher Curl(L)",
   ],
   legs: [
     "Squat",
@@ -61,10 +62,14 @@ const loadCustomExercises = () => {
 };
 
 const saveCustomExercises = (exercises: typeof DEFAULT_PRESETS) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(exercises));
+  if (typeof window !== "undefined") {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(exercises));
+  }
 };
 
-export const EXERCISE_PRESETS = loadCustomExercises();
+export const getExercisePresets = () => {
+  return loadCustomExercises();
+};
 
 export const addCustomExercise = (muscleGroup: keyof typeof DEFAULT_PRESETS, exercise: string) => {
   const currentExercises = loadCustomExercises();
@@ -82,4 +87,4 @@ export const removeCustomExercise = (muscleGroup: keyof typeof DEFAULT_PRESETS, 
 
 export const resetToDefaultPresets = () => {
   saveCustomExercises(DEFAULT_PRESETS);
-}; 
+};

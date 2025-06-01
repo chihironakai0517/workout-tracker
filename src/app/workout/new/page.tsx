@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { EXERCISE_PRESETS, DEFAULT_PRESETS } from "../data/exercise-presets";
+import { getExercisePresets, DEFAULT_PRESETS } from "../data/exercise-presets";
 import { Exercise, WeightExercise, CardioExercise, MuscleGroup, WorkoutHistory } from "../types";
 import { METS_VALUES, calculateCalories } from "../utils/calories";
 import { v4 as uuidv4 } from "uuid";
 import { saveWorkout, getLastWorkout } from "../utils/storage";
-import { addCustomExercise } from "../data/exercise-presets";
+import { addCustomExercise, removeCustomExercise } from "../data/exercise-presets";
 import { getLatestMeasurement } from "../../health/utils/storage";
 import Timer from "../components/Timer";
 
@@ -61,8 +61,14 @@ export default function NewWorkout() {
   const [lastWorkout, setLastWorkout] = useState<WorkoutHistory | null>(null);
   const [userWeight, setUserWeight] = useState<number>(DEFAULT_WEIGHT);
   const [showTimer, setShowTimer] = useState(false);
+  const [exercisePresets, setExercisePresets] = useState(DEFAULT_PRESETS);
+  const [isClient, setIsClient] = useState(false);
+  const [showCustomExerciseManager, setShowCustomExerciseManager] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
+    setExercisePresets(getExercisePresets());
+
     const last = getLastWorkout();
     setLastWorkout(last);
 
@@ -77,12 +83,12 @@ export default function NewWorkout() {
 
     const { name } = newExercise;
     const { duration, distance } = cardioInputs;
-    
+
     if (name && METS_VALUES[name as keyof typeof METS_VALUES]) {
       const speedKmH = (distance / (duration / 60));
       const mets = METS_VALUES[name as keyof typeof METS_VALUES].calculate(speedKmH);
       const calories = calculateCalories(mets, duration, userWeight);
-      
+
       setNewExercise(prev => {
         if (!isCardioExercise(prev)) return prev;
         return {
@@ -164,8 +170,20 @@ export default function NewWorkout() {
       addCustomExercise(muscleGroupKey, customExerciseName.trim());
       setCustomExerciseName("");
       setShowCustomExerciseInput(false);
-      window.location.reload();
+      setExercisePresets(getExercisePresets());
     }
+  };
+
+  const handleRemoveCustomExercise = (exercise: string) => {
+    const muscleGroupKey = activeGroup as keyof typeof DEFAULT_PRESETS;
+    removeCustomExercise(muscleGroupKey, exercise);
+    setExercisePresets(getExercisePresets());
+  };
+
+  const isCustomExercise = (exercise: string) => {
+    const muscleGroupKey = activeGroup as keyof typeof DEFAULT_PRESETS;
+    const defaultExercises = DEFAULT_PRESETS[muscleGroupKey] as readonly string[];
+    return !defaultExercises.includes(exercise);
   };
 
   return (
@@ -212,35 +230,77 @@ export default function NewWorkout() {
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2 mb-6">
-            {muscleGroups.map(group => (
-              <button
-                key={group.id}
-                onClick={() => handleGroupChange(group.id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors
-                  ${
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Muscle Group
+            </label>
+            <div className="grid grid-cols-3 sm:grid-cols-7 gap-2">
+              {muscleGroupsData.map(group => (
+                <button
+                  key={group.id}
+                  onClick={() => handleGroupChange(group.id)}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     activeGroup === group.id
                       ? "bg-blue-500 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
-              >
-                {group.name}
-              </button>
-            ))}
+                >
+                  {group.name}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="mb-8 p-4 bg-gray-50 rounded-lg">
+          <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-gray-900">
                 Add New Exercise
               </h3>
-              <button
-                onClick={() => setShowCustomExerciseInput(!showCustomExerciseInput)}
-                className="text-sm text-blue-500 hover:text-blue-600"
-              >
-                {showCustomExerciseInput ? "Cancel" : "Add Custom Exercise"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowCustomExerciseInput(!showCustomExerciseInput)}
+                  className="text-sm text-blue-500 hover:text-blue-600"
+                >
+                  {showCustomExerciseInput ? "Cancel" : "Add Custom Exercise"}
+                </button>
+                <button
+                  onClick={() => setShowCustomExerciseManager(!showCustomExerciseManager)}
+                  className="text-sm text-green-500 hover:text-green-600"
+                >
+                  {showCustomExerciseManager ? "Hide Manager" : "Manage Custom Exercises"}
+                </button>
+              </div>
             </div>
+
+            {showCustomExerciseManager && (
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <h4 className="text-md font-medium text-gray-900 mb-3">
+                  Custom Exercises for {muscleGroupsData.find(g => g.id === activeGroup)?.name}
+                </h4>
+                {isClient && (
+                  <div className="space-y-2">
+                    {exercisePresets[activeGroup as keyof typeof DEFAULT_PRESETS]
+                      .filter((exercise: string) => isCustomExercise(exercise))
+                      .map((exercise: string) => (
+                        <div key={exercise} className="flex items-center justify-between bg-white p-2 rounded border">
+                          <span className="text-sm">{exercise}</span>
+                          <button
+                            onClick={() => handleRemoveCustomExercise(exercise)}
+                            className="text-xs text-red-500 hover:text-red-600 px-2 py-1 hover:bg-red-50 rounded"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))}
+                    {exercisePresets[activeGroup as keyof typeof DEFAULT_PRESETS]
+                      .filter((exercise: string) => isCustomExercise(exercise))
+                      .length === 0 && (
+                      <p className="text-sm text-gray-500">No custom exercises for this muscle group.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {showCustomExerciseInput ? (
               <div className="mb-4 flex gap-2">
@@ -269,10 +329,10 @@ export default function NewWorkout() {
                 className="border rounded-md px-3 py-2"
               >
                 <option value="">Select Exercise</option>
-                {EXERCISE_PRESETS[activeGroup as keyof typeof DEFAULT_PRESETS].map(
+                {isClient && exercisePresets[activeGroup as keyof typeof DEFAULT_PRESETS].map(
                   (exercise: string) => (
                     <option key={exercise} value={exercise}>
-                      {exercise}
+                      {exercise} {isCustomExercise(exercise) ? '(Custom)' : ''}
                     </option>
                   )
                 )}
@@ -429,4 +489,4 @@ export default function NewWorkout() {
       {showTimer && <Timer onClose={() => setShowTimer(false)} />}
     </div>
   );
-} 
+}

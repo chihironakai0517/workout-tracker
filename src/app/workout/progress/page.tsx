@@ -13,7 +13,9 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
-import { DEFAULT_PRESETS, EXERCISE_PRESETS } from "../data/exercise-presets";
+import { DEFAULT_PRESETS, getExercisePresets } from "../data/exercise-presets";
+import { getWorkouts } from "../utils/storage";
+import { WorkoutHistory, WeightExercise } from "../types";
 
 ChartJS.register(
   CategoryScale,
@@ -38,26 +40,76 @@ export default function Progress() {
   const [muscleGroup, setMuscleGroup] = useState<keyof typeof DEFAULT_PRESETS>("chest");
   const [exerciseHistory, setExerciseHistory] = useState<ExerciseHistory>({});
   const [selectedExercise, setSelectedExercise] = useState<string>("");
+  const [exercisePresets, setExercisePresets] = useState(DEFAULT_PRESETS);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    // TODO: Implement workout history functionality
-    const workouts: any[] = [];
+    setIsClient(true);
+    setExercisePresets(getExercisePresets());
+  }, []);
+
+  useEffect(() => {
+    if (!isClient) return;
+
+    const workouts = getWorkouts();
     const history: ExerciseHistory = {};
 
     // Initialize history with all preset exercises
-    EXERCISE_PRESETS[muscleGroup].forEach((exercise: string) => {
+    exercisePresets[muscleGroup].forEach((exercise: string) => {
       history[exercise] = {
         dates: [],
         weights: []
       };
     });
 
+    // Populate history with actual workout data
+    workouts.forEach((workout: WorkoutHistory) => {
+      workout.muscleGroups.forEach(group => {
+        if (group.id === muscleGroup) {
+          group.exercises.forEach(exercise => {
+            if (exercise.type === 'weight' && history[exercise.name]) {
+              const weightExercise = exercise as WeightExercise;
+              // Calculate maximum weight for this exercise on this date
+              const maxWeight = weightExercise.weight;
+
+              // Find if this date already exists
+              const existingDateIndex = history[exercise.name].dates.indexOf(workout.date);
+              if (existingDateIndex >= 0) {
+                // If date exists, keep the higher weight
+                history[exercise.name].weights[existingDateIndex] = Math.max(
+                  history[exercise.name].weights[existingDateIndex],
+                  maxWeight
+                );
+              } else {
+                // Add new date and weight
+                history[exercise.name].dates.push(workout.date);
+                history[exercise.name].weights.push(maxWeight);
+              }
+            }
+          });
+        }
+      });
+    });
+
+    // Sort by date for each exercise
+    Object.keys(history).forEach(exerciseName => {
+      const combined = history[exerciseName].dates.map((date, index) => ({
+        date,
+        weight: history[exerciseName].weights[index]
+      })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      history[exerciseName] = {
+        dates: combined.map(item => item.date),
+        weights: combined.map(item => item.weight)
+      };
+    });
+
     setExerciseHistory(history);
     setSelectedExercise("");
-  }, [muscleGroup]);
+  }, [muscleGroup, exercisePresets, isClient]);
 
   const chartData = {
-    labels: selectedExercise ? exerciseHistory[selectedExercise]?.dates.map(date => 
+    labels: selectedExercise ? exerciseHistory[selectedExercise]?.dates.map(date =>
       new Date(date).toLocaleDateString()
     ) : [],
     datasets: [
@@ -65,7 +117,9 @@ export default function Progress() {
         label: `${selectedExercise} Weight Progress (kg)`,
         data: selectedExercise ? exerciseHistory[selectedExercise]?.weights : [],
         borderColor: "rgb(75, 192, 192)",
-        tension: 0.1
+        backgroundColor: "rgba(75, 192, 192, 0.2)",
+        tension: 0.1,
+        fill: true
       }
     ]
   };
@@ -86,7 +140,8 @@ export default function Progress() {
         title: {
           display: true,
           text: 'Weight (kg)'
-        }
+        },
+        beginAtZero: false
       },
       x: {
         title: {
@@ -96,6 +151,28 @@ export default function Progress() {
       }
     }
   };
+
+  const getProgressStats = () => {
+    if (!selectedExercise || !exerciseHistory[selectedExercise]?.weights.length) {
+      return null;
+    }
+
+    const weights = exerciseHistory[selectedExercise].weights;
+    const latest = weights[weights.length - 1];
+    const first = weights[0];
+    const progress = latest - first;
+    const progressPercentage = ((progress / first) * 100).toFixed(1);
+
+    return {
+      latest,
+      first,
+      progress,
+      progressPercentage: progress > 0 ? `+${progressPercentage}%` : `${progressPercentage}%`,
+      workoutCount: weights.length
+    };
+  };
+
+  const stats = getProgressStats();
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -142,9 +219,9 @@ export default function Progress() {
                 className="w-full border rounded-md px-3 py-2"
               >
                 <option value="">Select Exercise</option>
-                {EXERCISE_PRESETS[muscleGroup].map((exercise: string) => (
-                  <option 
-                    key={exercise} 
+                {isClient && exercisePresets[muscleGroup].map((exercise: string) => (
+                  <option
+                    key={exercise}
                     value={exercise}
                     disabled={!exerciseHistory[exercise]?.weights.length}
                   >
@@ -157,27 +234,43 @@ export default function Progress() {
 
           {selectedExercise && exerciseHistory[selectedExercise]?.weights.length > 0 ? (
             <div>
-              <Line data={chartData} options={chartOptions} />
-              <div className="mt-4 grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-gray-500">Latest Weight</h3>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {exerciseHistory[selectedExercise].weights[exerciseHistory[selectedExercise].weights.length - 1]} kg
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-gray-500">Progress</h3>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {(exerciseHistory[selectedExercise].weights[exerciseHistory[selectedExercise].weights.length - 1] - 
-                      exerciseHistory[selectedExercise].weights[0]).toFixed(1)} kg
-                  </p>
-                </div>
+              <div className="mb-6">
+                <Line data={chartData} options={chartOptions} />
               </div>
+
+              {stats && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-blue-600">Latest Weight</h3>
+                    <p className="text-2xl font-bold text-blue-900">
+                      {stats.latest} kg
+                    </p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-green-600">Total Progress</h3>
+                    <p className="text-2xl font-bold text-green-900">
+                      {stats.progress > 0 ? '+' : ''}{stats.progress.toFixed(1)} kg
+                    </p>
+                  </div>
+                  <div className="bg-purple-50 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-purple-600">Progress %</h3>
+                    <p className="text-2xl font-bold text-purple-900">
+                      {stats.progressPercentage}
+                    </p>
+                  </div>
+                  <div className="bg-orange-50 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-orange-600">Workouts</h3>
+                    <p className="text-2xl font-bold text-orange-900">
+                      {stats.workoutCount}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center text-gray-500 py-8">
-              {selectedExercise 
-                ? "No weight data available for the selected exercise" 
+              {selectedExercise
+                ? "No weight data available for the selected exercise. Start recording workouts to see your progress!"
                 : "Select an exercise to view progress"}
             </div>
           )}
@@ -185,4 +278,4 @@ export default function Progress() {
       </div>
     </div>
   );
-} 
+}

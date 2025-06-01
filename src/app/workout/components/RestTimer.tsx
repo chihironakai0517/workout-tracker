@@ -12,7 +12,7 @@ export default function RestTimer({ onClose }: RestTimerProps) {
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    
+
     if (isActive) {
       interval = setInterval(() => {
         setSeconds(prev => {
@@ -53,10 +53,10 @@ export default function RestTimer({ onClose }: RestTimerProps) {
           onClick={onClose}
           className="text-gray-500 hover:text-gray-700"
         >
-          Å~
+          &times;
         </button>
       </div>
-      
+
       <div className="text-4xl font-bold text-center mb-4 font-mono">
         {formatTime(seconds)}
       </div>
@@ -81,4 +81,4 @@ export default function RestTimer({ onClose }: RestTimerProps) {
       </div>
     </div>
   );
-} 
+}

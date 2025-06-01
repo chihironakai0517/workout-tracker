@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -14,8 +14,8 @@ import {
   Tooltip,
   Legend
 } from "chart.js";
-import { WeeklySummary, MonthlySummary } from "../../types";
-import { getWeeklySummary, getMonthlySummary } from "../utils/storage";
+import { WeeklySummary, MonthlySummary, BodyMeasurement, HealthGoals } from "../../types";
+import { getWeeklySummary, getMonthlySummary, getMeasurements, getGoals } from "../utils/storage";
 
 ChartJS.register(
   CategoryScale,
@@ -33,21 +33,45 @@ export default function Summary() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [weeklySummary, setWeeklySummary] = useState<WeeklySummary | null>(null);
   const [monthlySummary, setMonthlySummary] = useState<MonthlySummary | null>(null);
+  const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
+  const [goals, setGoals] = useState<HealthGoals | null>(null);
 
   useEffect(() => {
     if (view === "weekly") {
-      const summary = getWeeklySummary(selectedDate);
+      console.log("Getting weekly summary for date:", selectedDate);
+      
+      // Calculate the start of the week (Monday)
+      const weekStart = new Date(selectedDate);
+      const dayOfWeek = weekStart.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Make Monday the start
+      weekStart.setDate(weekStart.getDate() - daysToSubtract);
+      weekStart.setHours(0, 0, 0, 0); // Set to start of day
+      
+      console.log("Calculated week start:", weekStart);
+      
+      const summary = getWeeklySummary(weekStart);
       setWeeklySummary(summary);
+      console.log("Weekly Summary set:", summary);
     } else {
       const summary = getMonthlySummary(selectedDate.getFullYear(), selectedDate.getMonth());
       setMonthlySummary(summary);
     }
+    
+    // Load measurements and goals for the progress chart
+    const measurementData = getMeasurements();
+    setMeasurements(measurementData);
+    const currentGoals = getGoals();
+    setGoals(currentGoals);
   }, [view, selectedDate]);
 
   const handlePrevious = () => {
     const newDate = new Date(selectedDate);
     if (view === "weekly") {
       newDate.setDate(newDate.getDate() - 7);
+      // Ensure we're moving to the start of the week
+      const dayOfWeek = newDate.getDay();
+      const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      newDate.setDate(newDate.getDate() - daysToSubtract);
     } else {
       newDate.setMonth(newDate.getMonth() - 1);
     }
@@ -58,30 +82,88 @@ export default function Summary() {
     const newDate = new Date(selectedDate);
     if (view === "weekly") {
       newDate.setDate(newDate.getDate() + 7);
+      // Ensure we're moving to the start of the week
+      const dayOfWeek = newDate.getDay();
+      const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      newDate.setDate(newDate.getDate() - daysToSubtract);
     } else {
       newDate.setMonth(newDate.getMonth() + 1);
     }
     setSelectedDate(newDate);
   };
 
-  const weightChartData = {
-    labels: view === "weekly"
-      ? Array.from({ length: 7 }, (_, i) => {
-          const date = new Date(selectedDate);
-          date.setDate(date.getDate() + i);
-          return date.toLocaleDateString();
-        })
-      : monthlySummary?.weeklyProgress.map(w => new Date(w.startDate).toLocaleDateString()),
+  const progressChartData = {
+    labels: measurements.map(m => new Date(m.date).toLocaleDateString()),
     datasets: [
       {
         label: "Weight (kg)",
-        data: view === "weekly"
-          ? [weeklySummary?.averageWeight]
-          : monthlySummary?.weeklyProgress.map(w => w.averageWeight),
+        data: measurements.map(m => m.weight),
         borderColor: "rgb(75, 192, 192)",
         tension: 0.1
-      }
+      },
+      ...(goals?.targetWeight ? [{
+        label: "Target Weight",
+        data: Array(measurements.length).fill(goals.targetWeight),
+        borderColor: "rgba(75, 192, 192, 0.5)",
+        borderDash: [5, 5],
+        pointRadius: 0,
+        tension: 0
+      }] : []),
+      {
+        label: "Body Fat %",
+        data: measurements.map(m => m.bodyFat),
+        borderColor: "rgb(255, 99, 132)",
+        tension: 0.1
+      },
+      ...(goals?.targetBodyFat ? [{
+        label: "Target Body Fat",
+        data: Array(measurements.length).fill(goals.targetBodyFat),
+        borderColor: "rgba(255, 99, 132, 0.5)",
+        borderDash: [5, 5],
+        pointRadius: 0,
+        tension: 0
+      }] : [])
     ]
+  };
+
+  const progressChartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: "top" as const,
+      },
+
+      tooltip: {
+        callbacks: {
+          label: (context: any) => {
+            const label = context.dataset.label;
+            const value = context.parsed.y;
+            if (label.includes("Weight")) {
+              return `${label}: ${value} kg`;
+            } else if (label.includes("Body Fat")) {
+              return `${label}: ${value}%`;
+            }
+            return `${label}: ${value}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        reverse: false,
+        title: {
+          display: true,
+          text: "Date"
+        }
+      },
+      y: {
+        beginAtZero: false,
+        title: {
+          display: true,
+          text: "Value"
+        }
+      }
+    }
   };
 
   const nutritionChartData = {
@@ -89,50 +171,152 @@ export default function Summary() {
     datasets: [
       {
         label: "Actual",
-        data: view === "weekly"
-          ? [
-              weeklySummary?.averageCalories || 0,
-              weeklySummary?.averageProtein || 0,
-              weeklySummary?.averageFat || 0,
-              weeklySummary?.averageCarbs || 0
-            ]
-          : [
-              monthlySummary?.averageCalories || 0,
-              monthlySummary?.averageProtein || 0,
-              monthlySummary?.averageFat || 0,
-              monthlySummary?.averageCarbs || 0
-            ],
-        backgroundColor: "rgba(75, 192, 192, 0.5)"
+        data: [
+          view === "weekly" ? (weeklySummary?.averageCalories || 0) : (monthlySummary?.averageCalories || 0),
+          null, null, null
+        ],
+        backgroundColor: [
+          view === "weekly" 
+            ? ((weeklySummary?.averageCalories || 0) >= (goals?.dailyCalories || 0) ? "rgba(239, 68, 68, 0.7)" : "rgba(34, 197, 94, 0.7)")
+            : ((monthlySummary?.averageCalories || 0) >= (goals?.dailyCalories || 0) ? "rgba(239, 68, 68, 0.7)" : "rgba(34, 197, 94, 0.7)"),
+          "transparent", "transparent", "transparent"
+        ],
+        yAxisID: "y",
+        order: 1
+      },
+      {
+        label: "Actual",
+        data: [
+          null,
+          view === "weekly" ? (weeklySummary?.averageProtein || 0) : (monthlySummary?.averageProtein || 0),
+          view === "weekly" ? (weeklySummary?.averageFat || 0) : (monthlySummary?.averageFat || 0),
+          view === "weekly" ? (weeklySummary?.averageCarbs || 0) : (monthlySummary?.averageCarbs || 0)
+        ],
+        backgroundColor: [
+          "transparent",
+          view === "weekly" 
+            ? ((weeklySummary?.averageProtein || 0) >= (goals?.dailyProtein || 0) ? "rgba(239, 68, 68, 0.7)" : "rgba(34, 197, 94, 0.7)")
+            : ((monthlySummary?.averageProtein || 0) >= (goals?.dailyProtein || 0) ? "rgba(239, 68, 68, 0.7)" : "rgba(34, 197, 94, 0.7)"),
+          view === "weekly" 
+            ? ((weeklySummary?.averageFat || 0) >= (goals?.dailyFat || 0) ? "rgba(239, 68, 68, 0.7)" : "rgba(34, 197, 94, 0.7)")
+            : ((monthlySummary?.averageFat || 0) >= (goals?.dailyFat || 0) ? "rgba(239, 68, 68, 0.7)" : "rgba(34, 197, 94, 0.7)"),
+          view === "weekly" 
+            ? ((weeklySummary?.averageCarbs || 0) >= (goals?.dailyCarbs || 0) ? "rgba(239, 68, 68, 0.7)" : "rgba(34, 197, 94, 0.7)")
+            : ((monthlySummary?.averageCarbs || 0) >= (goals?.dailyCarbs || 0) ? "rgba(239, 68, 68, 0.7)" : "rgba(34, 197, 94, 0.7)")
+        ],
+        yAxisID: "y1",
+        order: 1
       },
       {
         label: "Goal",
-        data: view === "weekly"
-          ? [
-              weeklySummary?.goalProgress.calories || 0,
-              weeklySummary?.goalProgress.protein || 0,
-              weeklySummary?.goalProgress.fat || 0,
-              weeklySummary?.goalProgress.carbs || 0
-            ]
-          : [
-              monthlySummary?.goalProgress.calories || 0,
-              monthlySummary?.goalProgress.protein || 0,
-              monthlySummary?.goalProgress.fat || 0,
-              monthlySummary?.goalProgress.carbs || 0
-            ],
-        backgroundColor: "rgba(255, 99, 132, 0.5)"
+        data: [goals?.dailyCalories || 0, null, null, null],
+        backgroundColor: ["rgba(156, 163, 175, 0.5)", "transparent", "transparent", "transparent"],
+        borderColor: ["rgba(156, 163, 175, 1)", "transparent", "transparent", "transparent"],
+        borderWidth: 2,
+        yAxisID: "y",
+        order: 2
+      },
+      {
+        label: "Goal",
+        data: [null, goals?.dailyProtein || 0, goals?.dailyFat || 0, goals?.dailyCarbs || 0],
+        backgroundColor: ["transparent", "rgba(156, 163, 175, 0.5)", "rgba(156, 163, 175, 0.5)", "rgba(156, 163, 175, 0.5)"],
+        borderColor: ["transparent", "rgba(156, 163, 175, 1)", "rgba(156, 163, 175, 1)", "rgba(156, 163, 175, 1)"],
+        borderWidth: 2,
+        yAxisID: "y1",
+        order: 2
       }
     ]
   };
 
   const chartOptions = {
     responsive: true,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
     plugins: {
       legend: {
         position: "top" as const,
+        labels: {
+          filter: function(legendItem: any, chartData: any) {
+            // Show only unique labels (remove duplicate "Actual" and "Goal")
+            const labels = chartData.datasets.map((dataset: any) => dataset.label);
+            return labels.indexOf(legendItem.text) === legendItem.datasetIndex || 
+                   (legendItem.text === "Actual" && legendItem.datasetIndex === 0) ||
+                   (legendItem.text === "Goal" && legendItem.datasetIndex === 2);
+          }
+        }
       },
-      title: {
+      tooltip: {
+        filter: function(tooltipItem: any) {
+          // Skip null values
+          return tooltipItem.parsed.y !== null;
+        },
+        callbacks: {
+          title: function(tooltipItems: any[]) {
+            return tooltipItems[0]?.label || '';
+          },
+          label: (context: any) => {
+            const label = context.dataset.label;
+            const value = context.parsed.y;
+            const dataIndex = context.dataIndex;
+            
+            if (value === null) return undefined;
+            
+            if (label === "Actual") {
+              let goal = 0;
+              if (dataIndex === 0) {
+                goal = goals?.dailyCalories || 0;
+              } else if (dataIndex === 1) {
+                goal = goals?.dailyProtein || 0;
+              } else if (dataIndex === 2) {
+                goal = goals?.dailyFat || 0;
+              } else if (dataIndex === 3) {
+                goal = goals?.dailyCarbs || 0;
+              }
+              
+              const percentage = goal > 0 ? Math.round((value / goal) * 100) : 0;
+              const status = percentage >= 100 ? "⚠" : "✓";
+              
+              if (dataIndex === 0) return `${value.toFixed(0)} kcal (${percentage}% ${status})`;
+              else return `${value.toFixed(1)}g (${percentage}% ${status})`;
+            } else {
+              if (dataIndex === 0) return `Goal: ${value.toFixed(0)} kcal`;
+              else return `Goal: ${value.toFixed(1)}g`;
+            }
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: 'category' as const,
+      },
+      y: {
+        type: 'linear' as const,
         display: true,
-        text: "Progress Overview"
+        position: 'left' as const,
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: "Calories (kcal)"
+        },
+        grid: {
+          drawOnChartArea: true,
+        },
+      },
+      y1: {
+        type: 'linear' as const,
+        display: true,
+        position: 'right' as const,
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: "Macronutrients (g)"
+        },
+        grid: {
+          drawOnChartArea: false,
+        },
       }
     }
   };
@@ -198,8 +382,14 @@ export default function Summary() {
 
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Weight Progress</h2>
-              <Line data={weightChartData} options={chartOptions} />
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Progress Chart</h2>
+              {measurements.length > 0 ? (
+                <Line data={progressChartData} options={progressChartOptions} />
+              ) : (
+                <p className="text-center text-gray-500 py-4">
+                  Add measurements to see your progress chart
+                </p>
+              )}
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Nutrition Overview</h2>
@@ -215,8 +405,8 @@ export default function Summary() {
               <h3 className="text-sm font-medium text-gray-500">Average Weight</h3>
               <p className="text-2xl font-bold text-gray-900">
                 {view === "weekly"
-                  ? `${weeklySummary?.averageWeight?.toFixed(1) || "-"} kg`
-                  : `${monthlySummary?.averageWeight?.toFixed(1) || "-"} kg`
+                  ? (weeklySummary?.averageWeight !== undefined ? `${weeklySummary.averageWeight.toFixed(1)} kg` : "-")
+                  : (monthlySummary?.averageWeight !== undefined ? `${monthlySummary.averageWeight.toFixed(1)} kg` : "-")
                 }
               </p>
             </div>
@@ -224,8 +414,8 @@ export default function Summary() {
               <h3 className="text-sm font-medium text-gray-500">Average Body Fat</h3>
               <p className="text-2xl font-bold text-gray-900">
                 {view === "weekly"
-                  ? `${weeklySummary?.averageBodyFat?.toFixed(1) || "-"}%`
-                  : `${monthlySummary?.averageBodyFat?.toFixed(1) || "-"}%`
+                  ? (weeklySummary?.averageBodyFat !== undefined ? `${weeklySummary.averageBodyFat.toFixed(1)}%` : "-")
+                  : (monthlySummary?.averageBodyFat !== undefined ? `${monthlySummary.averageBodyFat.toFixed(1)}%` : "-")
                 }
               </p>
             </div>
@@ -233,8 +423,8 @@ export default function Summary() {
               <h3 className="text-sm font-medium text-gray-500">Average Calories</h3>
               <p className="text-2xl font-bold text-gray-900">
                 {view === "weekly"
-                  ? `${weeklySummary?.averageCalories?.toFixed(0) || "-"} kcal`
-                  : `${monthlySummary?.averageCalories?.toFixed(0) || "-"} kcal`
+                  ? (weeklySummary?.averageCalories !== undefined ? `${weeklySummary.averageCalories.toFixed(0)} kcal` : "-")
+                  : (monthlySummary?.averageCalories !== undefined ? `${monthlySummary.averageCalories.toFixed(0)} kcal` : "-")
                 }
               </p>
             </div>
@@ -242,8 +432,8 @@ export default function Summary() {
               <h3 className="text-sm font-medium text-gray-500">Water Intake</h3>
               <p className="text-2xl font-bold text-gray-900">
                 {view === "weekly"
-                  ? `${weeklySummary?.averageWaterIntake?.toFixed(0) || "-"} ml`
-                  : `${monthlySummary?.averageWaterIntake?.toFixed(0) || "-"} ml`
+                  ? (weeklySummary?.averageWaterIntake !== undefined ? `${weeklySummary.averageWaterIntake.toFixed(0)} ml` : "-")
+                  : (monthlySummary?.averageWaterIntake !== undefined ? `${monthlySummary.averageWaterIntake.toFixed(0)} ml` : "-")
                 }
               </p>
             </div>

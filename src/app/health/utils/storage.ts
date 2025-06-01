@@ -51,7 +51,8 @@ export const saveDailyNutrition = (nutrition: Omit<DailyNutrition, "id">): void 
 export const getAllDailyNutrition = (): DailyNutrition[] => {
   if (typeof window === "undefined") return [];
   const data = localStorage.getItem(NUTRITION_KEY);
-  return data ? JSON.parse(data) : [];
+  const result = data ? JSON.parse(data) : [];
+  return result;
 };
 
 export function getDailyNutrition(date: string): DailyNutrition {
@@ -172,6 +173,13 @@ export const getWeeklySummary = (startDate: Date): WeeklySummary => {
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 6);
 
+  console.log("getWeeklySummary called with:", { 
+    startDate: startDate.toISOString(), 
+    endDate: endDate.toISOString(),
+    startLocalDate: startDate.toLocaleDateString(),
+    endLocalDate: endDate.toLocaleDateString()
+  });
+
   const measurements = getMeasurements().filter(m => {
     const date = new Date(m.date);
     return date >= startDate && date <= endDate;
@@ -179,12 +187,37 @@ export const getWeeklySummary = (startDate: Date): WeeklySummary => {
 
   const nutritionData = getAllDailyNutrition().filter(d => {
     const date = new Date(d.date);
-    return date >= startDate && date <= endDate;
+    const isInRange = date >= startDate && date <= endDate;
+    console.log("Checking nutrition data:", {
+      nutritionDate: d.date,
+      parsedDate: date.toLocaleDateString(),
+      isInRange,
+      startDate: startDate.toLocaleDateString(),
+      endDate: endDate.toLocaleDateString()
+    });
+    return isInRange;
+  }).filter(d => {
+    const hasData = d.totalCalories > 0 || d.waterIntake > 0 || d.meals.length > 0;
+    console.log("Nutrition data has content:", {
+      date: d.date,
+      totalCalories: d.totalCalories,
+      waterIntake: d.waterIntake,
+      mealsCount: d.meals.length,
+      hasData
+    });
+    return hasData;
   });
 
-  const goals = getGoals();
+  console.log("Filtered weekly measurements:", measurements);
+  console.log("Filtered weekly nutritionData:", nutritionData);
 
-  return {
+  const goals = getGoals();
+  
+  const recordedDays = Math.max(nutritionData.length, 1);
+  
+  console.log("Weekly recordedDays:", recordedDays, "nutritionData.length:", nutritionData.length);
+
+  const result = {
     startDate: startDate.toISOString(),
     endDate: endDate.toISOString(),
     averageWeight: measurements.length > 0
@@ -193,12 +226,22 @@ export const getWeeklySummary = (startDate: Date): WeeklySummary => {
     averageBodyFat: measurements.some(m => m.bodyFat)
       ? measurements.reduce((acc, m) => acc + (m.bodyFat || 0), 0) / measurements.filter(m => m.bodyFat).length
       : undefined,
-    totalWorkouts: 0, // TODO: Implement workout tracking integration
-    averageCalories: nutritionData.reduce((acc, d) => acc + d.totalCalories, 0) / 7,
-    averageProtein: nutritionData.reduce((acc, d) => acc + d.totalProtein, 0) / 7,
-    averageCarbs: nutritionData.reduce((acc, d) => acc + d.totalCarbs, 0) / 7,
-    averageFat: nutritionData.reduce((acc, d) => acc + d.totalFat, 0) / 7,
-    averageWaterIntake: nutritionData.reduce((acc, d) => acc + d.waterIntake, 0) / 7,
+    totalWorkouts: 0,
+    averageCalories: nutritionData.length > 0 
+      ? nutritionData.reduce((acc, d) => acc + d.totalCalories, 0) / recordedDays
+      : 0,
+    averageProtein: nutritionData.length > 0 
+      ? nutritionData.reduce((acc, d) => acc + d.totalProtein, 0) / recordedDays
+      : 0,
+    averageCarbs: nutritionData.length > 0 
+      ? nutritionData.reduce((acc, d) => acc + d.totalCarbs, 0) / recordedDays
+      : 0,
+    averageFat: nutritionData.length > 0 
+      ? nutritionData.reduce((acc, d) => acc + d.totalFat, 0) / recordedDays
+      : 0,
+    averageWaterIntake: nutritionData.length > 0 
+      ? nutritionData.reduce((acc, d) => acc + d.waterIntake, 0) / recordedDays
+      : 0,
     goalProgress: {
       weight: goals?.targetWeight
         ? (measurements[measurements.length - 1]?.weight || 0) - goals.targetWeight
@@ -206,29 +249,42 @@ export const getWeeklySummary = (startDate: Date): WeeklySummary => {
       bodyFat: goals?.targetBodyFat && measurements[measurements.length - 1]?.bodyFat !== undefined
         ? (measurements[measurements.length - 1]?.bodyFat || 0) - goals.targetBodyFat
         : undefined,
-      calories: goals?.dailyCalories
-        ? nutritionData.reduce((acc, d) => acc + d.totalCalories, 0) / 7 - goals.dailyCalories
+      calories: goals?.dailyCalories && nutritionData.length > 0
+        ? nutritionData.reduce((acc, d) => acc + d.totalCalories, 0) / recordedDays - goals.dailyCalories
         : undefined,
-      protein: goals?.dailyProtein
-        ? nutritionData.reduce((acc, d) => acc + d.totalProtein, 0) / 7 - goals.dailyProtein
+      protein: goals?.dailyProtein && nutritionData.length > 0
+        ? nutritionData.reduce((acc, d) => acc + d.totalProtein, 0) / recordedDays - goals.dailyProtein
         : undefined,
-      carbs: goals?.dailyCarbs
-        ? nutritionData.reduce((acc, d) => acc + d.totalCarbs, 0) / 7 - goals.dailyCarbs
+      carbs: goals?.dailyCarbs && nutritionData.length > 0
+        ? nutritionData.reduce((acc, d) => acc + d.totalCarbs, 0) / recordedDays - goals.dailyCarbs
         : undefined,
-      fat: goals?.dailyFat
-        ? nutritionData.reduce((acc, d) => acc + d.totalFat, 0) / 7 - goals.dailyFat
+      fat: goals?.dailyFat && nutritionData.length > 0
+        ? nutritionData.reduce((acc, d) => acc + d.totalFat, 0) / recordedDays - goals.dailyFat
         : undefined,
-      waterIntake: goals?.dailyWaterIntake
-        ? nutritionData.reduce((acc, d) => acc + d.waterIntake, 0) / 7 - goals.dailyWaterIntake
+      waterIntake: goals?.dailyWaterIntake && nutritionData.length > 0
+        ? nutritionData.reduce((acc, d) => acc + d.waterIntake, 0) / recordedDays - goals.dailyWaterIntake
         : undefined,
     }
   };
+  
+  console.log("Weekly summary result:", result);
+  return result;
 };
 
 export const getMonthlySummary = (year: number, month: number): MonthlySummary => {
   const startDate = new Date(year, month, 1);
   const endDate = new Date(year, month + 1, 0);
   
+  const measurements = getMeasurements().filter(m => {
+    const date = new Date(m.date);
+    return date >= startDate && date <= endDate;
+  });
+
+  const nutritionData = getAllDailyNutrition().filter(d => {
+    const date = new Date(d.date);
+    return date >= startDate && date <= endDate;
+  }).filter(d => d.totalCalories > 0 || d.waterIntake > 0 || d.meals.length > 0);
+
   const weeklyReports: WeeklySummary[] = [];
   let currentDate = new Date(startDate);
   
@@ -237,18 +293,36 @@ export const getMonthlySummary = (year: number, month: number): MonthlySummary =
     currentDate.setDate(currentDate.getDate() + 7);
   }
 
-  return {
+  const recordedDays = Math.max(nutritionData.length, 1);
+
+  const result = {
     month,
     year,
-    averageWeight: weeklyReports.reduce((acc, w) => acc + (w.averageWeight || 0), 0) / weeklyReports.length,
-    averageBodyFat: weeklyReports.reduce((acc, w) => acc + (w.averageBodyFat || 0), 0) / weeklyReports.length,
+    averageWeight: measurements.length > 0
+      ? measurements.reduce((acc, m) => acc + m.weight, 0) / measurements.length
+      : undefined,
+    averageBodyFat: measurements.some(m => m.bodyFat)
+      ? measurements.reduce((acc, m) => acc + (m.bodyFat || 0), 0) / measurements.filter(m => m.bodyFat).length
+      : undefined,
     totalWorkouts: weeklyReports.reduce((acc, w) => acc + w.totalWorkouts, 0),
-    averageCalories: weeklyReports.reduce((acc, w) => acc + w.averageCalories, 0) / weeklyReports.length,
-    averageProtein: weeklyReports.reduce((acc, w) => acc + w.averageProtein, 0) / weeklyReports.length,
-    averageCarbs: weeklyReports.reduce((acc, w) => acc + w.averageCarbs, 0) / weeklyReports.length,
-    averageFat: weeklyReports.reduce((acc, w) => acc + w.averageFat, 0) / weeklyReports.length,
-    averageWaterIntake: weeklyReports.reduce((acc, w) => acc + w.averageWaterIntake, 0) / weeklyReports.length,
+    averageCalories: nutritionData.length > 0 
+      ? nutritionData.reduce((acc, d) => acc + d.totalCalories, 0) / recordedDays
+      : 0,
+    averageProtein: nutritionData.length > 0 
+      ? nutritionData.reduce((acc, d) => acc + d.totalProtein, 0) / recordedDays
+      : 0,
+    averageCarbs: nutritionData.length > 0 
+      ? nutritionData.reduce((acc, d) => acc + d.totalCarbs, 0) / recordedDays
+      : 0,
+    averageFat: nutritionData.length > 0 
+      ? nutritionData.reduce((acc, d) => acc + d.totalFat, 0) / recordedDays
+      : 0,
+    averageWaterIntake: nutritionData.length > 0 
+      ? nutritionData.reduce((acc, d) => acc + d.waterIntake, 0) / recordedDays
+      : 0,
     goalProgress: weeklyReports[weeklyReports.length - 1].goalProgress,
     weeklyProgress: weeklyReports
   };
+  
+  return result;
 }; 
