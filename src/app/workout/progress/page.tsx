@@ -158,16 +158,41 @@ export default function Progress() {
     }
 
     const weights = exerciseHistory[selectedExercise].weights;
-    const latest = weights[weights.length - 1];
+    const max = Math.max(...weights);
     const first = weights[0];
-    const progress = latest - first;
-    const progressPercentage = ((progress / first) * 100).toFixed(1);
+    const progress = max - first;
+
+    // Calculate max volume from workout data
+    const workouts = getWorkouts();
+    let maxVolume = 0;
+    let maxVolumeDetails = { weight: 0, reps: 0 };
+
+    workouts.forEach((workout: WorkoutHistory) => {
+      workout.muscleGroups.forEach(group => {
+        if (group.id === muscleGroup) {
+          group.exercises.forEach(exercise => {
+            if (exercise.name === selectedExercise && exercise.type === 'weight') {
+              const weightExercise = exercise as WeightExercise;
+              const volume = weightExercise.weight * weightExercise.reps;
+              if (volume > maxVolume) {
+                maxVolume = volume;
+                maxVolumeDetails = {
+                  weight: weightExercise.weight,
+                  reps: weightExercise.reps
+                };
+              }
+            }
+          });
+        }
+      });
+    });
 
     return {
-      latest,
+      max,
+      maxVolume,
+      maxVolumeDetails,
       first,
       progress,
-      progressPercentage: progress > 0 ? `+${progressPercentage}%` : `${progressPercentage}%`,
       workoutCount: weights.length
     };
   };
@@ -238,34 +263,37 @@ export default function Progress() {
                 <Line data={chartData} options={chartOptions} />
               </div>
 
-              {stats && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <h3 className="text-sm font-medium text-blue-600">Latest Weight</h3>
-                    <p className="text-2xl font-bold text-blue-900">
-                      {stats.latest} kg
-                    </p>
-                  </div>
-                  <div className="bg-green-50 rounded-lg p-4">
-                    <h3 className="text-sm font-medium text-green-600">Total Progress</h3>
-                    <p className="text-2xl font-bold text-green-900">
-                      {stats.progress > 0 ? '+' : ''}{stats.progress.toFixed(1)} kg
-                    </p>
-                  </div>
-                  <div className="bg-purple-50 rounded-lg p-4">
-                    <h3 className="text-sm font-medium text-purple-600">Progress %</h3>
-                    <p className="text-2xl font-bold text-purple-900">
-                      {stats.progressPercentage}
-                    </p>
-                  </div>
-                  <div className="bg-orange-50 rounded-lg p-4">
-                    <h3 className="text-sm font-medium text-orange-600">Workouts</h3>
-                    <p className="text-2xl font-bold text-orange-900">
-                      {stats.workoutCount}
-                    </p>
-                  </div>
-                </div>
-              )}
+                             {stats && (
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                   <div className="bg-red-50 rounded-lg p-4">
+                     <h3 className="text-sm font-medium text-red-600">Max Weight</h3>
+                     <p className="text-2xl font-bold text-red-900">
+                       {stats.max} kg
+                     </p>
+                   </div>
+                                       <div className="bg-purple-50 rounded-lg p-4">
+                      <h3 className="text-sm font-medium text-purple-600">Max Volume</h3>
+                      <p className="text-2xl font-bold text-purple-900">
+                        {stats.maxVolume} kg
+                      </p>
+                      <p className="text-sm text-purple-700 mt-1">
+                        {stats.maxVolumeDetails.weight}kg × {stats.maxVolumeDetails.reps}回
+                      </p>
+                    </div>
+                   <div className="bg-green-50 rounded-lg p-4">
+                     <h3 className="text-sm font-medium text-green-600">Total Progress</h3>
+                     <p className="text-2xl font-bold text-green-900">
+                       {stats.progress > 0 ? '+' : ''}{stats.progress.toFixed(1)} kg
+                     </p>
+                   </div>
+                   <div className="bg-orange-50 rounded-lg p-4">
+                     <h3 className="text-sm font-medium text-orange-600">Workouts</h3>
+                     <p className="text-2xl font-bold text-orange-900">
+                       {stats.workoutCount}
+                     </p>
+                   </div>
+                 </div>
+               )}
             </div>
           ) : (
             <div className="text-center text-gray-500 py-8">

@@ -10,6 +10,7 @@ import { saveWorkout, getLastWorkout } from "../utils/storage";
 import { addCustomExercise, removeCustomExercise } from "../data/exercise-presets";
 import { getLatestMeasurement } from "../../health/utils/storage";
 import Timer from "../components/Timer";
+import RestTimer from "../components/RestTimer";
 
 const DEFAULT_WEIGHT = 70;
 
@@ -64,6 +65,8 @@ export default function NewWorkout() {
   const [exercisePresets, setExercisePresets] = useState(DEFAULT_PRESETS);
   const [isClient, setIsClient] = useState(false);
   const [showCustomExerciseManager, setShowCustomExerciseManager] = useState(false);
+  const [showRestTimer, setShowRestTimer] = useState(false);
+  const [restDuration, setRestDuration] = useState(180); // 3 minutes default
 
   useEffect(() => {
     setIsClient(true);
@@ -104,21 +107,52 @@ export default function NewWorkout() {
   const addExercise = (groupId: string) => {
     if (!newExercise.name) return;
 
+    let exerciseToAdd: Exercise;
+
+    if (newExercise.type === "cardio") {
+      exerciseToAdd = {
+        ...newExercise,
+        duration: cardioInputs.duration,
+        distance: cardioInputs.distance,
+        calories: Math.round(cardioInputs.duration * 8), // Rough estimate
+      } as CardioExercise;
+    } else {
+      exerciseToAdd = newExercise as WeightExercise;
+    }
+
     setMuscleGroups(groups =>
       groups.map(group =>
         group.id === groupId
-          ? { ...group, exercises: [...group.exercises, { ...newExercise }] }
+          ? { ...group, exercises: [...group.exercises, { ...exerciseToAdd }] }
           : group
       )
     );
 
     const isCardio = groupId === "cardio";
-    setNewExercise(createInitialExercise(isCardio));
+
+    // Keep the exercise name but reset other values
     if (isCardio) {
+      setNewExercise(prev => ({
+        ...prev,
+        duration: 0,
+        distance: 0,
+        calories: 0,
+      }));
       setCardioInputs({ duration: 0, distance: 0 });
+    } else {
+      setNewExercise(prev => ({
+        ...prev,
+        weight: 0,
+        reps: 0,
+      }));
     }
 
-    setShowTimer(true);
+    // Start rest timer for weight exercises (not cardio)
+    if (!isCardio) {
+      setShowRestTimer(true);
+    } else {
+      setShowTimer(true);
+    }
   };
 
   const removeExercise = (groupId: string, index: number) => {
@@ -200,6 +234,28 @@ export default function NewWorkout() {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm p-6">
+          {/* Rest Timer Settings */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Rest Timer Settings</h3>
+            <div className="flex items-center space-x-4">
+              <label className="text-sm text-gray-700">Rest Duration:</label>
+              <select
+                value={restDuration}
+                onChange={(e) => setRestDuration(Number(e.target.value))}
+                className="border rounded-md px-3 py-1 text-sm"
+              >
+                <option value={60}>1 minute</option>
+                <option value={90}>1.5 minutes</option>
+                <option value={120}>2 minutes</option>
+                <option value={180}>3 minutes</option>
+                <option value={300}>5 minutes</option>
+              </select>
+              <span className="text-xs text-gray-500">
+                (Auto-starts after adding weight exercises)
+              </span>
+            </div>
+          </div>
+
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Workout Date
@@ -320,7 +376,7 @@ export default function NewWorkout() {
               </div>
             ) : null}
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <select
                 value={newExercise.name}
                 onChange={e =>
@@ -379,42 +435,86 @@ export default function NewWorkout() {
                 </>
               ) : (
                 <>
-                  <input
-                    type="number"
-                    placeholder="Weight (kg)"
-                    value={(newExercise as WeightExercise).weight || ""}
-                    onChange={e =>
-                      setNewExercise(prev => ({
-                        ...(prev as WeightExercise),
-                        weight: Number(e.target.value),
-                      }))
-                    }
-                    className="border rounded-md px-3 py-2"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Reps"
-                    value={(newExercise as WeightExercise).reps || ""}
-                    onChange={e =>
-                      setNewExercise(prev => ({
-                        ...(prev as WeightExercise),
-                        reps: Number(e.target.value),
-                      }))
-                    }
-                    className="border rounded-md px-3 py-2"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Sets"
-                    value={(newExercise as WeightExercise).sets || ""}
-                    onChange={e =>
-                      setNewExercise(prev => ({
-                        ...(prev as WeightExercise),
-                        sets: Number(e.target.value),
-                      }))
-                    }
-                    className="border rounded-md px-3 py-2"
-                  />
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      placeholder="Weight (kg)"
+                      value={(newExercise as WeightExercise).weight || ""}
+                      onChange={e =>
+                        setNewExercise(prev => ({
+                          ...(prev as WeightExercise),
+                          weight: Number(e.target.value),
+                        }))
+                      }
+                      className="border rounded-md px-3 py-2 flex-1"
+                    />
+                    <div className="flex space-x-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNewExercise(prev => ({
+                            ...(prev as WeightExercise),
+                            weight: Math.max(0, ((newExercise as WeightExercise).weight || 0) - 10),
+                          }))
+                        }
+                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+                      >
+                        -10
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNewExercise(prev => ({
+                            ...(prev as WeightExercise),
+                            weight: ((newExercise as WeightExercise).weight || 0) + 10,
+                          }))
+                        }
+                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+                      >
+                        +10
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      placeholder="Reps"
+                      value={(newExercise as WeightExercise).reps || ""}
+                      onChange={e =>
+                        setNewExercise(prev => ({
+                          ...(prev as WeightExercise),
+                          reps: Number(e.target.value),
+                        }))
+                      }
+                      className="border rounded-md px-3 py-2 flex-1"
+                    />
+                    <div className="flex space-x-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNewExercise(prev => ({
+                            ...(prev as WeightExercise),
+                            reps: Math.max(0, ((newExercise as WeightExercise).reps || 0) - 10),
+                          }))
+                        }
+                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+                      >
+                        -10
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNewExercise(prev => ({
+                            ...(prev as WeightExercise),
+                            reps: ((newExercise as WeightExercise).reps || 0) + 10,
+                          }))
+                        }
+                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+                      >
+                        +10
+                      </button>
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -458,7 +558,6 @@ export default function NewWorkout() {
                             <>
                               <span>{exercise.weight} kg</span>
                               <span>{exercise.reps} reps</span>
-                              <span>{exercise.sets} sets</span>
                             </>
                           )}
                         </div>
@@ -487,6 +586,12 @@ export default function NewWorkout() {
         </div>
       </div>
       {showTimer && <Timer onClose={() => setShowTimer(false)} />}
+      {showRestTimer && (
+        <RestTimer
+          onClose={() => setShowRestTimer(false)}
+          duration={restDuration}
+        />
+      )}
     </div>
   );
 }

@@ -96,7 +96,7 @@ export default function SyncPage() {
         {stats && (
           <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Data Summary</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <div className="bg-blue-50 rounded-lg p-3">
                 <h3 className="text-sm font-medium text-blue-600">Total Workouts</h3>
                 <p className="text-xl font-bold text-blue-900">{stats.totalWorkouts}</p>
@@ -108,6 +108,14 @@ export default function SyncPage() {
               <div className="bg-orange-50 rounded-lg p-3">
                 <h3 className="text-sm font-medium text-orange-600">Total Calories</h3>
                 <p className="text-xl font-bold text-orange-900">{stats.totalCalories}</p>
+              </div>
+              <div className="bg-red-50 rounded-lg p-3">
+                <h3 className="text-sm font-medium text-red-600">Weight Records</h3>
+                <p className="text-xl font-bold text-red-900">{stats.totalMeasurements}</p>
+              </div>
+              <div className="bg-yellow-50 rounded-lg p-3">
+                <h3 className="text-sm font-medium text-yellow-600">Goals Set</h3>
+                <p className="text-xl font-bold text-yellow-900">{stats.hasGoals ? "Yes" : "No"}</p>
               </div>
               <div className="bg-purple-50 rounded-lg p-3">
                 <h3 className="text-sm font-medium text-purple-600">Data Size</h3>
@@ -254,7 +262,9 @@ export default function SyncPage() {
             <div className="mt-4 p-3 bg-blue-50 rounded-lg">
               <p className="text-blue-800">
                 <strong>Note:</strong> The sync will merge data from both devices.
-                Duplicate workouts (same ID) will be skipped automatically.
+                Duplicate workouts and measurements (same ID) will be skipped automatically.
+                <br />
+                <strong>Synced Data:</strong> Workouts, weight measurements, and health goals.
               </p>
             </div>
           </div>

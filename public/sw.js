@@ -1,127 +1,137 @@
-const CACHE_NAME = 'workout-tracker-v2';
-const STATIC_CACHE_NAME = 'static-v2';
-const DYNAMIC_CACHE_NAME = 'dynamic-v2';
-
-const urlsToCache = [
-  '/',
-  '/workout/new',
-  '/workout/progress',
-  '/workout/history',
-  '/workout/sync',
-  '/workout/details',
-  '/health/measurements',
-  '/health/nutrition',
-  '/health/goals',
-  '/health/summary',
-  '/health/meal',
-  '/manifest.json',
-  '/workout-icon.svg',
-  '/app-icon.png'
-];
+// Service Worker for background timer functionality
+const CACHE_NAME = 'workout-timer-v1';
 
 // Install event
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing...');
-  event.waitUntil(
-    caches.open(STATIC_CACHE_NAME)
-      .then((cache) => {
-        console.log('[SW] Caching static assets');
-        return cache.addAll(urlsToCache);
-      })
-      .then(() => {
-        return self.skipWaiting();
-      })
-  );
+  console.log('Service Worker installing...');
+  self.skipWaiting();
 });
 
 // Activate event
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating...');
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== STATIC_CACHE_NAME && cacheName !== DYNAMIC_CACHE_NAME) {
-            console.log('[SW] Removing old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => {
-      return self.clients.claim();
-    })
-  );
+  console.log('Service Worker activating...');
+  event.waitUntil(self.clients.claim());
 });
 
-// Fetch event with cache strategies
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Handle API requests differently
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirst(request));
-  }
-  // Handle navigation requests
-  else if (request.mode === 'navigate') {
-    event.respondWith(cacheFirst(request));
-  }
-  // Handle other requests
-  else {
-    event.respondWith(cacheFirst(request));
+// Message event for timer communication
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'TIMER_START') {
+    startTimer(event.data.duration, event.data.timerId);
+  } else if (event.data && event.data.type === 'TIMER_STOP') {
+    stopTimer(event.data.timerId);
+  } else if (event.data && event.data.type === 'TIMER_PAUSE') {
+    pauseTimer(event.data.timerId);
+  } else if (event.data && event.data.type === 'TIMER_RESUME') {
+    resumeTimer(event.data.timerId);
   }
 });
 
-// Cache first strategy
-async function cacheFirst(request) {
-  const cache = await caches.open(STATIC_CACHE_NAME);
-  const cached = await cache.match(request);
+// Timer storage
+const timers = new Map();
 
-  if (cached) {
-    return cached;
-  }
+function startTimer(duration, timerId) {
+  const startTime = Date.now();
+  const endTime = startTime + (duration * 1000);
 
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const dynamicCache = await caches.open(DYNAMIC_CACHE_NAME);
-      dynamicCache.put(request, networkResponse.clone());
+  timers.set(timerId, {
+    startTime,
+    endTime,
+    duration,
+    isActive: true,
+    remainingTime: duration
+  });
+
+  // Check timer every second
+  const interval = setInterval(() => {
+    const timer = timers.get(timerId);
+    if (!timer || !timer.isActive) {
+      clearInterval(interval);
+      return;
     }
-    return networkResponse;
-  } catch (error) {
-    // Return offline page for navigation requests
-    if (request.mode === 'navigate') {
-      return caches.match('/');
+
+    const now = Date.now();
+    const remaining = Math.max(0, Math.ceil((timer.endTime - now) / 1000));
+
+    timer.remainingTime = remaining;
+
+    // Update all clients
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'TIMER_UPDATE',
+          timerId,
+          remainingTime: remaining,
+          isComplete: remaining <= 0
+        });
+      });
+    });
+
+    // Timer completed
+    if (remaining <= 0) {
+      clearInterval(interval);
+      timers.delete(timerId);
+
+      // Show notification
+      showNotification('Rest Timer Complete', 'Your rest period is over!');
+
+      // Notify clients
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'TIMER_COMPLETE',
+            timerId
+          });
+        });
+      });
     }
-    throw error;
+  }, 1000);
+}
+
+function stopTimer(timerId) {
+  timers.delete(timerId);
+}
+
+function pauseTimer(timerId) {
+  const timer = timers.get(timerId);
+  if (timer) {
+    timer.isActive = false;
   }
 }
 
-// Network first strategy
-async function networkFirst(request) {
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const dynamicCache = await caches.open(DYNAMIC_CACHE_NAME);
-      dynamicCache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    const cache = await caches.open(DYNAMIC_CACHE_NAME);
-    const cached = await cache.match(request);
-    return cached || new Response('Offline', { status: 503 });
+function resumeTimer(timerId) {
+  const timer = timers.get(timerId);
+  if (timer) {
+    timer.isActive = true;
+    // Adjust end time based on remaining time
+    timer.endTime = Date.now() + (timer.remainingTime * 1000);
   }
 }
 
-// Background sync (if supported)
+function showNotification(title, body) {
+  if ('Notification' in self && self.Notification.permission === 'granted') {
+    new self.Notification(title, {
+      body,
+      icon: '/app-icon.png',
+      badge: '/app-icon.png',
+      tag: 'workout-timer'
+    });
+  }
+}
+
+// Background sync for timer updates
 self.addEventListener('sync', (event) => {
-  console.log('[SW] Background sync:', event.tag);
-  if (event.tag === 'workout-sync') {
-    event.waitUntil(syncWorkoutData());
+  if (event.tag === 'timer-sync') {
+    event.waitUntil(syncTimers());
   }
 });
 
-async function syncWorkoutData() {
-  // This would sync any pending workout data when back online
-  console.log('[SW] Syncing workout data...');
+async function syncTimers() {
+  // Sync timer states with clients
+  const clients = await self.clients.matchAll();
+  clients.forEach(client => {
+    client.postMessage({
+      type: 'TIMER_SYNC',
+      timers: Array.from(timers.entries())
+    });
+  });
 }

@@ -28,6 +28,7 @@ ChartJS.register(
 );
 
 export default function BodyMeasurements() {
+  const [isClient, setIsClient] = useState(false);
   const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
   const [editingMeasurement, setEditingMeasurement] = useState<BodyMeasurement | null>(null);
   const [newMeasurement, setNewMeasurement] = useState<Omit<BodyMeasurement, "id">>({
@@ -42,8 +43,16 @@ export default function BodyMeasurements() {
   });
 
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isClient) return;
+
     const data = getMeasurements();
-    setMeasurements(data);
+    // Sort by date in descending order (newest first)
+    const sortedData = data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setMeasurements(sortedData);
 
     const latestMeasurement = getLatestMeasurement();
     if (latestMeasurement && !editingMeasurement) {
@@ -58,9 +67,11 @@ export default function BodyMeasurements() {
         activityLevel: latestMeasurement.activityLevel || "moderately_active"
       });
     }
-  }, [editingMeasurement]);
+  }, [editingMeasurement, isClient]);
 
   useEffect(() => {
+    if (!isClient) return;
+
     const bmr = calculateBMR(
       newMeasurement.weight,
       newMeasurement.height,
@@ -68,7 +79,7 @@ export default function BodyMeasurements() {
       newMeasurement.gender
     );
     setNewMeasurement(prev => ({ ...prev, bmr }));
-  }, [newMeasurement.weight, newMeasurement.height, newMeasurement.age, newMeasurement.gender]);
+  }, [newMeasurement.weight, newMeasurement.height, newMeasurement.age, newMeasurement.gender, isClient]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -83,7 +94,9 @@ export default function BodyMeasurements() {
       saveMeasurement(newMeasurement);
     }
     const updatedData = getMeasurements();
-    setMeasurements(updatedData);
+    // Sort by date in descending order (newest first)
+    const sortedData = updatedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setMeasurements(sortedData);
     setNewMeasurement(prev => ({
       ...prev,
       date: new Date().toISOString().split("T")[0]
@@ -125,13 +138,27 @@ export default function BodyMeasurements() {
     if (confirm("この測定データを削除してもよろしいですか？")) {
       deleteMeasurement(measurement.id);
       const updatedData = getMeasurements();
-      setMeasurements(updatedData);
-      
+      // Sort by date in descending order (newest first)
+      const sortedData = updatedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setMeasurements(sortedData);
+
       if (editingMeasurement?.id === measurement.id) {
         handleCancelEdit();
       }
     }
   };
+
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">Loading...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -244,8 +271,8 @@ export default function BodyMeasurements() {
                 </label>
                 <select
                   value={newMeasurement.activityLevel || "moderately_active"}
-                  onChange={(e) => setNewMeasurement(prev => ({ 
-                    ...prev, 
+                  onChange={(e) => setNewMeasurement(prev => ({
+                    ...prev,
                     activityLevel: e.target.value as "sedentary" | "lightly_active" | "moderately_active" | "very_active" | "extremely_active"
                   }))}
                   className="w-full border rounded-md px-3 py-2"
@@ -263,7 +290,7 @@ export default function BodyMeasurements() {
                 </label>
                 <input
                   type="number"
-                  value={newMeasurement.bmr && newMeasurement.activityLevel ? 
+                  value={newMeasurement.bmr && newMeasurement.activityLevel ?
                     calculateTDEE(newMeasurement.bmr, newMeasurement.activityLevel) : ""}
                   className="w-full border rounded-md px-3 py-2 bg-gray-50"
                   disabled

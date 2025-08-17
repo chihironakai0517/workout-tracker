@@ -54,8 +54,7 @@ export default function RootLayout({
         {/* <PWAInstallPrompt /> */}
         {/* <OfflineIndicator /> */}
 
-        {/* Service Worker registration temporarily disabled for debugging */}
-        {/*
+        {/* Service Worker registration for background timer */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -74,7 +73,6 @@ export default function RootLayout({
             `,
           }}
         />
-        */}
       </body>
     </html>
   )

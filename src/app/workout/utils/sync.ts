@@ -1,14 +1,21 @@
 import { WorkoutHistory } from '../types';
 import { getWorkouts, saveWorkout } from './storage';
+import { getMeasurements, getGoals } from '../../health/utils/storage';
 
 // エクスポート/インポート機能
 export const exportWorkoutData = (): string => {
   const workouts = getWorkouts();
+  const measurements = getMeasurements();
+  const goals = getGoals();
+
   const exportData = {
-    version: '1.0',
+    version: '1.1',
     exportDate: new Date().toISOString(),
     workouts: workouts,
-    totalWorkouts: workouts.length
+    measurements: measurements,
+    goals: goals,
+    totalWorkouts: workouts.length,
+    totalMeasurements: measurements.length
   };
   return JSON.stringify(exportData, null, 2);
 };
@@ -37,25 +44,49 @@ export const importWorkoutData = (jsonData: string): { success: boolean; message
     }
 
     const existingWorkouts = getWorkouts();
-    const existingIds = new Set(existingWorkouts.map(w => w.id));
+    const existingWorkoutIds = new Set(existingWorkouts.map(w => w.id));
 
     let importedCount = 0;
     const newWorkouts: WorkoutHistory[] = [...existingWorkouts];
 
     // 重複チェックして新しいワークアウトのみ追加
     for (const workout of importData.workouts) {
-      if (!existingIds.has(workout.id)) {
+      if (!existingWorkoutIds.has(workout.id)) {
         newWorkouts.push(workout);
         importedCount++;
       }
     }
 
-    // データを保存
+    // ワークアウトデータを保存
     localStorage.setItem('workout-history', JSON.stringify(newWorkouts));
+
+    // 体重測定データのインポート（v1.1以降）
+    if (importData.measurements && Array.isArray(importData.measurements)) {
+      const existingMeasurements = getMeasurements();
+      const existingMeasurementIds = new Set(existingMeasurements.map(m => m.id));
+
+      const newMeasurements = [...existingMeasurements];
+      let measurementImportedCount = 0;
+
+      for (const measurement of importData.measurements) {
+        if (!existingMeasurementIds.has(measurement.id)) {
+          newMeasurements.push(measurement);
+          measurementImportedCount++;
+        }
+      }
+
+      localStorage.setItem('body-measurements', JSON.stringify(newMeasurements));
+      importedCount += measurementImportedCount;
+    }
+
+    // 目標データのインポート（v1.1以降）
+    if (importData.goals && importData.goals.id) {
+      localStorage.setItem('health-goals', JSON.stringify(importData.goals));
+    }
 
     return {
       success: true,
-      message: `Successfully imported ${importedCount} new workouts`,
+      message: `Successfully imported ${importedCount} new items (workouts, measurements, goals)`,
       importedCount
     };
   } catch (error) {
@@ -70,10 +101,15 @@ export const importWorkoutData = (jsonData: string): { success: boolean; message
 // QRコード用のデータ圧縮
 export const generateSyncCode = (): string => {
   const workouts = getWorkouts();
+  const measurements = getMeasurements();
+  const goals = getGoals();
+
   const compressedData = {
-    v: '1.0',
+    v: '1.1',
     d: new Date().toISOString().split('T')[0],
-    w: workouts
+    w: workouts,
+    m: measurements,
+    g: goals
   };
   return btoa(JSON.stringify(compressedData));
 };
@@ -84,7 +120,9 @@ export const importFromSyncCode = (syncCode: string): { success: boolean; messag
     const fullData = {
       version: decodedData.v,
       exportDate: decodedData.d,
-      workouts: decodedData.w || []
+      workouts: decodedData.w || [],
+      measurements: decodedData.m || [],
+      goals: decodedData.g || null
     };
 
     return importWorkoutData(JSON.stringify(fullData));
@@ -107,6 +145,9 @@ export const generateShareableLink = (): string => {
 // 統計情報
 export const getDataStats = () => {
   const workouts = getWorkouts();
+  const measurements = getMeasurements();
+  const goals = getGoals();
+
   const totalExercises = workouts.reduce((total, workout) =>
     total + workout.muscleGroups.reduce((groupTotal, group) =>
       groupTotal + group.exercises.length, 0
@@ -123,7 +164,9 @@ export const getDataStats = () => {
     totalWorkouts: workouts.length,
     totalExercises,
     totalCalories,
+    totalMeasurements: measurements.length,
+    hasGoals: !!goals,
     dateRange,
-    dataSize: JSON.stringify(workouts).length
+    dataSize: JSON.stringify({ workouts, measurements, goals }).length
   };
 };
