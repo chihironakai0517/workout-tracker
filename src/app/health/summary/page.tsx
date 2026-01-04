@@ -93,7 +93,9 @@ export default function Summary() {
   };
 
   const progressChartData = {
-    labels: measurements.map(m => new Date(m.date).toLocaleDateString()),
+    labels: measurements.map(m =>
+      new Date(m.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    ),
     datasets: [
       {
         label: "Weight (kg)",
@@ -159,6 +161,12 @@ export default function Summary() {
         title: {
           display: true,
           text: "Date"
+        },
+        ticks: {
+          autoSkip: true,
+          maxTicksLimit: 6,
+          maxRotation: 0,
+          minRotation: 0
         }
       },
       weight: {
@@ -170,7 +178,8 @@ export default function Summary() {
           text: "Weight (kg)"
         },
         ticks: {
-          callback: (value: number | string) => `${value} kg`
+          callback: (value: number | string) => `${value} kg`,
+          maxTicksLimit: 5
         }
       },
       bodyFat: {
@@ -185,7 +194,8 @@ export default function Summary() {
           text: "Body Fat (%)"
         },
         ticks: {
-          callback: (value: number | string) => `${value}%`
+          callback: (value: number | string) => `${value}%`,
+          maxTicksLimit: 5
         }
       }
     }
@@ -255,6 +265,7 @@ export default function Summary() {
 
   const chartOptions = {
     responsive: true,
+    maintainAspectRatio: false,
     interaction: {
       mode: 'index' as const,
       intersect: false,
@@ -301,7 +312,7 @@ export default function Summary() {
               }
               
               const percentage = goal > 0 ? Math.round((value / goal) * 100) : 0;
-              const status = percentage >= 100 ? "⚠" : "✓";
+              const status = percentage >= 100 ? "over goal" : "on track";
               
               if (dataIndex === 0) return `${value.toFixed(0)} kcal (${percentage}% ${status})`;
               else return `${value.toFixed(1)}g (${percentage}% ${status})`;
@@ -316,6 +327,10 @@ export default function Summary() {
     scales: {
       x: {
         type: 'category' as const,
+        ticks: {
+          maxRotation: 0,
+          minRotation: 0
+        }
       },
       y: {
         type: 'linear' as const,
@@ -329,6 +344,9 @@ export default function Summary() {
         grid: {
           drawOnChartArea: true,
         },
+        ticks: {
+          maxTicksLimit: 6
+        }
       },
       y1: {
         type: 'linear' as const,
@@ -342,6 +360,9 @@ export default function Summary() {
         grid: {
           drawOnChartArea: false,
         },
+        ticks: {
+          maxTicksLimit: 6
+        }
       }
     }
   };
@@ -388,7 +409,7 @@ export default function Summary() {
                 onClick={handlePrevious}
                 className="px-3 py-1 text-gray-600 hover:text-gray-900"
               >
-                ←
+                {"<"}
               </button>
               <span className="text-gray-700">
                 {view === "weekly"
@@ -400,7 +421,7 @@ export default function Summary() {
                 onClick={handleNext}
                 className="px-3 py-1 text-gray-600 hover:text-gray-900"
               >
-                →
+                {">"}
               </button>
             </div>
           </div>
@@ -409,8 +430,10 @@ export default function Summary() {
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Progress Chart</h2>
               {measurements.length > 0 ? (
-                <div className="h-64 sm:h-72 md:h-80 lg:h-96">
-                  <Line data={progressChartData} options={progressChartOptions} />
+                <div className="overflow-x-auto pb-3 -mx-4 px-4 sm:mx-0 sm:px-0">
+                  <div className="min-w-[520px] h-64 sm:h-72 md:h-80 lg:h-96">
+                    <Line data={progressChartData} options={progressChartOptions} />
+                  </div>
                 </div>
               ) : (
                 <p className="text-center text-gray-500 py-4">
@@ -420,7 +443,11 @@ export default function Summary() {
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Nutrition Overview</h2>
-              <Bar data={nutritionChartData} options={chartOptions} />
+              <div className="overflow-x-auto pb-3 -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div className="min-w-[480px] h-64 sm:h-72">
+                  <Bar data={nutritionChartData} options={chartOptions} />
+                </div>
+              </div>
             </div>
           </div>
         </div>

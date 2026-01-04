@@ -217,7 +217,7 @@ export default function Progress() {
 
   const chartData = {
     labels: selectedExercise ? exerciseHistory[selectedExercise]?.dates.map(date =>
-      new Date(date).toLocaleDateString()
+      new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric" })
     ) : [],
     datasets: [
       {
@@ -250,9 +250,10 @@ export default function Progress() {
 
   const chartOptions = {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'top' as const,
+        position: 'bottom' as const,
       },
       title: {
         display: true,
@@ -265,12 +266,21 @@ export default function Progress() {
           display: true,
           text: 'Weight / 1RM (kg)'
         },
-        beginAtZero: false
+        beginAtZero: false,
+        ticks: {
+          maxTicksLimit: 5
+        }
       },
       x: {
         title: {
           display: true,
           text: 'Date'
+        },
+        ticks: {
+          autoSkip: true,
+          maxTicksLimit: 6,
+          maxRotation: 0,
+          minRotation: 0
         }
       },
       y1: {
@@ -285,7 +295,10 @@ export default function Progress() {
           display: true,
           text: 'Volume (kg)'
         },
-        beginAtZero: true
+        beginAtZero: true,
+        ticks: {
+          maxTicksLimit: 5
+        }
       }
     }
   };
@@ -416,8 +429,10 @@ export default function Progress() {
 
           {selectedExercise && exerciseHistory[selectedExercise]?.weights.length > 0 ? (
             <div>
-              <div className="mb-6">
-                <Line data={chartData} options={chartOptions} />
+              <div className="mb-6 overflow-x-auto pb-3 -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div className="min-w-[520px] h-64 sm:h-72">
+                  <Line data={chartData} options={chartOptions} />
+                </div>
               </div>
 
               {stats && (
