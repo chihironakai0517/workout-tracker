@@ -13,6 +13,7 @@ import Timer from "../components/Timer";
 import RestTimer from "../components/RestTimer";
 
 const DEFAULT_WEIGHT = 70;
+const getTodayLocalDate = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
 const muscleGroupsData = [
   { id: "chest", name: "Chest", exercises: [] },
@@ -54,9 +55,7 @@ export default function NewWorkout() {
     duration: 0,
     distance: 0,
   });
-  const [workoutDate, setWorkoutDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
-  );
+  const [workoutDate, setWorkoutDate] = useState<string>(getTodayLocalDate());
   const [showCustomExerciseInput, setShowCustomExerciseInput] = useState(false);
   const [customExerciseName, setCustomExerciseName] = useState("");
   const [lastWorkout, setLastWorkout] = useState<WorkoutHistory | null>(null);

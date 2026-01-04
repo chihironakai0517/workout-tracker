@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getWorkoutSummaries, getWorkouts } from './workout/utils/storage';
-import { WorkoutSummary, WorkoutHistory } from './workout/types';
+import { WorkoutSummary, WorkoutHistory, Exercise } from './workout/types';
 
 // Health tracking icons using heroicons paths
 const HEALTH_LINKS = [
@@ -49,63 +49,88 @@ const HEALTH_LINKS = [
   }
 ];
 
-type CalendarDay = {
-  date: string;
-  dayOfWeek: string;
-  dayNumber: number;
-  hasWorkout: boolean;
-  muscleGroups: string[];
+const formatDateLocal = (date: Date) => {
+  // YYYY-MM-DD in local time (avoids UTCずれ)
+  return date.toLocaleDateString('en-CA');
 };
 
 export default function Home() {
   const [workouts, setWorkouts] = useState<WorkoutSummary[]>([]);
-  const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
+  const [workoutMap, setWorkoutMap] = useState<Map<string, WorkoutHistory[]>>(new Map());
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [monthCursor, setMonthCursor] = useState<Date>(new Date());
+  const [monthCells, setMonthCells] = useState<{ date: Date; inMonth: boolean; hasWorkout: boolean; isToday: boolean; isSelected: boolean; }[]>([]);
+
+  const buildMonthGrid = (cursor: Date) => {
+    const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+    const startDay = start.getDay();
+    const totalDays = end.getDate();
+    const cells: { date: Date; inMonth: boolean; hasWorkout: boolean; isToday: boolean; isSelected: boolean; }[] = [];
+
+    // Leading blanks (previous month)
+    for (let i = 0; i < startDay; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() - (startDay - i));
+      const key = formatDateLocal(d);
+      cells.push({
+        date: d,
+        inMonth: false,
+        hasWorkout: workoutMap.has(key),
+        isToday: key === formatDateLocal(new Date()),
+        isSelected: key === formatDateLocal(selectedDate),
+      });
+    }
+
+    // Current month days
+    for (let d = 1; d <= totalDays; d++) {
+      const dayDate = new Date(cursor.getFullYear(), cursor.getMonth(), d);
+      const key = formatDateLocal(dayDate);
+      cells.push({
+        date: dayDate,
+        inMonth: true,
+        hasWorkout: workoutMap.has(key),
+        isToday: key === formatDateLocal(new Date()),
+        isSelected: key === formatDateLocal(selectedDate),
+      });
+    }
+
+    // Trailing blanks to fill last week
+    const trailing = (7 - (cells.length % 7)) % 7;
+    for (let i = 0; i < trailing; i++) {
+      const d = new Date(end);
+      d.setDate(end.getDate() + i + 1);
+      const key = formatDateLocal(d);
+      cells.push({
+        date: d,
+        inMonth: false,
+        hasWorkout: workoutMap.has(key),
+        isToday: key === formatDateLocal(new Date()),
+        isSelected: key === formatDateLocal(selectedDate),
+      });
+    }
+
+    return cells;
+  };
 
   useEffect(() => {
     const summaries = getWorkoutSummaries();
     setWorkouts(summaries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
-    // Generate calendar for last 2 weeks
-    generateCalendar();
+    const data = getWorkouts();
+    const map = new Map<string, WorkoutHistory[]>();
+    data.forEach(w => {
+      const key = w.date;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)?.push(w);
+    });
+    setWorkoutMap(map);
+    setMonthCells(buildMonthGrid(new Date()));
   }, []);
 
-  const generateCalendar = () => {
-    const days: CalendarDay[] = [];
-    const today = new Date();
-    const workoutData = getWorkouts();
-
-    // Create a map of workout dates to muscle groups
-    const workoutMap = new Map<string, string[]>();
-    workoutData.forEach(workout => {
-      const muscleGroups = workout.muscleGroups
-        .filter(group => group.exercises.length > 0)
-        .map(group => group.name);
-      workoutMap.set(workout.date, muscleGroups);
-    });
-
-    // Generate last 14 days
-    for (let i = 13; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-
-      const dateString = date.toISOString().split('T')[0];
-      const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short' });
-      const dayNumber = date.getDate();
-
-      const hasWorkout = workoutMap.has(dateString);
-      const muscleGroups = hasWorkout ? workoutMap.get(dateString) || [] : [];
-
-      days.push({
-        date: dateString,
-        dayOfWeek,
-        dayNumber,
-        hasWorkout,
-        muscleGroups
-      });
-    }
-
-    setCalendarDays(days);
-  };
+  useEffect(() => {
+    setMonthCells(buildMonthGrid(monthCursor));
+  }, [selectedDate, workoutMap, monthCursor]);
 
   const getMuscleGroupColor = (muscleGroup: string) => {
     const colors: { [key: string]: string } = {
@@ -118,6 +143,52 @@ export default function Home() {
       'Cardio': 'bg-yellow-100 text-yellow-800'
     };
     return colors[muscleGroup] || 'bg-gray-100 text-gray-800';
+  };
+
+  const summarizeWorkouts = (entries: WorkoutHistory[]) => {
+    let exerciseCount = 0;
+    let setCount = 0;
+    entries.forEach(workout => {
+      workout.muscleGroups.forEach(group => {
+        group.exercises.forEach(exercise => {
+          exerciseCount += 1;
+          if ((exercise as any).sets) {
+            setCount += (exercise as any).sets;
+          } else {
+            setCount += 1;
+          }
+        });
+      });
+    });
+    return { exerciseCount, setCount };
+  };
+
+  const handleSelectDate = (date: Date) => {
+    setSelectedDate(date);
+    setMonthCursor(new Date(date.getFullYear(), date.getMonth(), 1));
+  };
+
+  const goToPrevMonth = () => {
+    const next = new Date(monthCursor);
+    next.setMonth(monthCursor.getMonth() - 1);
+    setMonthCursor(next);
+  };
+
+  const goToNextMonth = () => {
+    const next = new Date(monthCursor);
+    next.setMonth(monthCursor.getMonth() + 1);
+    setMonthCursor(next);
+  };
+
+  const selectedDateKey = formatDateLocal(selectedDate);
+  const selectedEntries = workoutMap.get(selectedDateKey) || [];
+  const selectedSummary = summarizeWorkouts(selectedEntries);
+
+  const formatExerciseDetail = (exercise: Exercise) => {
+    if (exercise.type === 'weight') {
+      return `${exercise.weight} kg x ${exercise.reps} reps`;
+    }
+    return `${exercise.duration} min, ${exercise.distance} km, ${exercise.calories} kcal`;
   };
 
   return (
@@ -150,56 +221,106 @@ export default function Home() {
               </div>
             </div>
 
-                                    {/* Calendar */}
-            <div className="mb-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Last 2 Weeks</h3>
-              <div className="grid grid-cols-7 gap-0 border border-gray-300 rounded-lg overflow-hidden">
-                {/* Day headers */}
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center text-xs font-semibold text-gray-600 py-2 bg-gray-50 border-r border-gray-300 last:border-r-0">
-                    {day}
-                  </div>
-                ))}
-                
-                {/* Calendar days */}
-                {calendarDays.map((day, index) => (
-                  <div
-                    key={day.date}
-                    className={`relative p-1 text-center min-h-[70px] transition-all duration-200 hover:bg-gray-50 ${
-                      day.hasWorkout
-                        ? 'bg-gradient-to-br from-blue-50 to-blue-100'
-                        : 'bg-white'
-                    } ${(index + 7) % 7 !== 6 ? 'border-r border-gray-300' : ''} ${
-                      index < 7 ? 'border-b border-gray-300' : ''
-                    }`}
-                  >
-                    <div className={`text-sm font-bold ${
-                      day.hasWorkout ? 'text-blue-900' : 'text-gray-700'
-                    }`}>
-                      {day.dayNumber}
+            {/* Schedule: Mini month + week detail */}
+            <div className="mb-4 space-y-4">
+              <h3 className="text-lg font-medium text-gray-900">Schedule</h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="border rounded-lg p-3 bg-gray-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <button onClick={goToPrevMonth} className="text-sm text-gray-600 hover:text-gray-900 px-2">←</button>
+                    <div className="text-sm font-semibold text-gray-900">
+                      {monthCursor.toLocaleString('default', { month: 'long', year: 'numeric' })}
                     </div>
-                    {day.hasWorkout && (
-                      <div className="mt-1 space-y-0.5">
-                        {day.muscleGroups.slice(0, 2).map((group, idx) => (
-                          <div
-                            key={idx}
-                            className={`text-xs px-1.5 py-0.5 rounded-full font-medium shadow-sm ${getMuscleGroupColor(group)}`}
-                          >
-                            {group}
-                          </div>
-                        ))}
-                        {day.muscleGroups.length > 2 && (
-                          <div className="text-xs text-gray-600 font-medium">
-                            +{day.muscleGroups.length - 2}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    <button onClick={goToNextMonth} className="text-sm text-gray-600 hover:text-gray-900 px-2">→</button>
                   </div>
-                ))}
+                  <div className="grid grid-cols-7 text-center text-xs text-gray-600 mb-1">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                      <div key={d} className="py-1 font-semibold">{d}</div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {monthCells.map((cell, idx) => {
+                      const key = `${formatDateLocal(cell.date)}-${idx}`;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => handleSelectDate(cell.date)}
+                          className={`relative py-2 text-sm rounded-md transition-all duration-150
+                            ${cell.inMonth ? 'text-gray-900' : 'text-gray-400'}
+                            ${cell.isSelected ? 'bg-blue-600 text-white' : 'bg-white hover:bg-blue-50'}
+                            ${cell.hasWorkout ? 'border border-blue-200' : 'border border-transparent'}
+                          `}
+                        >
+                          <span className="font-medium">{cell.date.getDate()}</span>
+                          {cell.hasWorkout && !cell.isSelected && (
+                            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                          )}
+                          {cell.isToday && !cell.isSelected && (
+                            <span className="absolute top-1 right-1 text-[10px] text-blue-500">today</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-3 bg-white">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-gray-900">Selected Day</h4>
+                    <span className="text-xs text-gray-500">
+                      {selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                  {selectedEntries.length > 0 ? (
+                    <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                      <div className="flex justify-between text-xs text-gray-700 px-1">
+                        <span>Workouts: {selectedEntries.length}</span>
+                        <span>Exercises: {selectedSummary.exerciseCount}</span>
+                        <span>Sets: {selectedSummary.setCount}</span>
+                      </div>
+                      {selectedEntries.map((workout, idx) => {
+                        const groups = workout.muscleGroups.filter(g => g.exercises.length > 0);
+                        return (
+                          <div key={`${workout.id}-${idx}`} className="border rounded-md p-3 bg-gray-50">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-semibold text-gray-900">Workout {idx + 1}</span>
+                              <span className="text-xs text-gray-600">{workout.totalCalories} kcal</span>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {groups.length > 0 ? groups.map((group, gidx) => (
+                                <span key={gidx} className={`text-[11px] px-2 py-0.5 rounded-full ${getMuscleGroupColor(group.name)}`}>
+                                  {group.name} ({group.exercises.length})
+                                </span>
+                              )) : <span className="text-xs text-gray-500">No exercises</span>}
+                            </div>
+                            {groups.length > 0 && (
+                              <div className="mt-3 space-y-2">
+                                {groups.map((group, gidx) => (
+                                  <div key={`${workout.id}-${gidx}`} className="border border-dashed border-gray-200 rounded-md p-2 bg-white">
+                                    <div className="text-xs font-semibold text-gray-800 mb-1">{group.name}</div>
+                                    <div className="space-y-1">
+                                      {group.exercises.map((ex, eidx) => (
+                                        <div key={`${workout.id}-${gidx}-${eidx}`} className="text-xs text-gray-700 flex justify-between">
+                                          <span className="font-medium">{ex.name}</span>
+                                          <span className="text-gray-600">{formatExerciseDetail(ex as Exercise)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500 py-6 text-center">
+                      No workout recorded for this day.
+                    </div>
+                  )}
+                </div>
               </div>
-
-
             </div>
           </div>
 

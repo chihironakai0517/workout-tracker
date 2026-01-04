@@ -31,6 +31,7 @@ export default function RestTimer({ onClose, duration = 600 }: RestTimerProps) {
     onComplete: () => {
       // Play notification sound
       playNotificationSound();
+      triggerVibration();
       onClose();
     },
     onUpdate: (remainingTime) => {
@@ -77,6 +78,12 @@ export default function RestTimer({ onClose, duration = 600 }: RestTimerProps) {
       oscillator.stop(audioContext.currentTime + 0.3);
     } catch (error) {
       console.log('Audio notification not supported');
+    }
+  };
+
+  const triggerVibration = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([200, 100, 200]);
     }
   };
 

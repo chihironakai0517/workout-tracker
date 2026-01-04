@@ -31,6 +31,7 @@ export default function Timer({ onClose, duration = 600 }: TimerProps) {
     onComplete: () => {
       // Play notification sound
       playNotificationSound();
+      triggerVibration();
       onClose();
     },
     onUpdate: (remainingTime) => {
@@ -77,6 +78,13 @@ export default function Timer({ onClose, duration = 600 }: TimerProps) {
       oscillator.stop(audioContext.currentTime + 0.3);
     } catch (error) {
       console.log('Audio notification not supported');
+    }
+  };
+
+  const triggerVibration = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      // Quick double buzz pattern
+      navigator.vibrate([200, 100, 200]);
     }
   };
 

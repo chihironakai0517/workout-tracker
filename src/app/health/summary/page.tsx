@@ -99,7 +99,8 @@ export default function Summary() {
         label: "Weight (kg)",
         data: measurements.map(m => m.weight),
         borderColor: "rgb(75, 192, 192)",
-        tension: 0.1
+        tension: 0.1,
+        yAxisID: "weight"
       },
       ...(goals?.targetWeight ? [{
         label: "Target Weight",
@@ -107,13 +108,15 @@ export default function Summary() {
         borderColor: "rgba(75, 192, 192, 0.5)",
         borderDash: [5, 5],
         pointRadius: 0,
-        tension: 0
+        tension: 0,
+        yAxisID: "weight"
       }] : []),
       {
         label: "Body Fat %",
         data: measurements.map(m => m.bodyFat),
         borderColor: "rgb(255, 99, 132)",
-        tension: 0.1
+        tension: 0.1,
+        yAxisID: "bodyFat"
       },
       ...(goals?.targetBodyFat ? [{
         label: "Target Body Fat",
@@ -121,13 +124,15 @@ export default function Summary() {
         borderColor: "rgba(255, 99, 132, 0.5)",
         borderDash: [5, 5],
         pointRadius: 0,
-        tension: 0
+        tension: 0,
+        yAxisID: "bodyFat"
       }] : [])
     ]
   };
 
   const progressChartOptions = {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: {
         position: "top" as const,
@@ -156,11 +161,31 @@ export default function Summary() {
           text: "Date"
         }
       },
-      y: {
+      weight: {
+        type: "linear" as const,
+        position: "left" as const,
         beginAtZero: false,
         title: {
           display: true,
-          text: "Value"
+          text: "Weight (kg)"
+        },
+        ticks: {
+          callback: (value: number | string) => `${value} kg`
+        }
+      },
+      bodyFat: {
+        type: "linear" as const,
+        position: "right" as const,
+        beginAtZero: false,
+        grid: {
+          drawOnChartArea: false
+        },
+        title: {
+          display: true,
+          text: "Body Fat (%)"
+        },
+        ticks: {
+          callback: (value: number | string) => `${value}%`
         }
       }
     }
@@ -384,7 +409,9 @@ export default function Summary() {
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Progress Chart</h2>
               {measurements.length > 0 ? (
-                <Line data={progressChartData} options={progressChartOptions} />
+                <div className="h-64 sm:h-72 md:h-80 lg:h-96">
+                  <Line data={progressChartData} options={progressChartOptions} />
+                </div>
               ) : (
                 <p className="text-center text-gray-500 py-4">
                   Add measurements to see your progress chart
