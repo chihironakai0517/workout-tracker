@@ -442,9 +442,11 @@ export default function Summary() {
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Progress Chart</h2>
               {measurements.length > 0 ? (
-                <div className="bg-gray-50 rounded-lg p-3 overflow-x-auto pb-2">
-                  <div className="min-w-[520px] h-64 sm:h-72 md:h-80 w-full">
-                    <Line data={progressChartData} options={progressChartOptions} />
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="overflow-x-auto pb-3 -mx-3 px-3 sm:mx-0 sm:px-0">
+                    <div className="min-w-[520px] h-64 sm:h-72 md:h-80 w-full">
+                      <Line data={progressChartData} options={progressChartOptions} />
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -455,9 +457,11 @@ export default function Summary() {
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Nutrition Overview</h2>
-              <div className="bg-gray-50 rounded-lg p-3 overflow-x-auto pb-2">
-                <div className="min-w-[500px] h-64 sm:h-72 w-full">
-                  <Bar data={nutritionChartData} options={chartOptions} />
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="overflow-x-auto pb-3 -mx-3 px-3 sm:mx-0 sm:px-0">
+                  <div className="min-w-[500px] h-64 sm:h-72 w-full">
+                    <Bar data={nutritionChartData} options={chartOptions} />
+                  </div>
                 </div>
               </div>
             </div>
