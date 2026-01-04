@@ -380,7 +380,7 @@ export default function Summary() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gray-50 p-4 overflow-x-hidden">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900">Health Summary</h1>
